@@ -1,15 +1,16 @@
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
+
 from login.moodle_login import fazer_login
 from relatorios.baixar_acessos import abrir_relatorio_acessos
 
 
 def menu_periodo():
-
     print("\n===================================")
     print("ATHENA AVA INTELLIGENCE")
     print("===================================\n")
 
     print("Selecione o período da análise:\n")
-
     print("1 - Últimos 7 dias")
     print("2 - Últimos 15 dias")
     print("3 - Últimos 30 dias")
@@ -19,38 +20,49 @@ def menu_periodo():
 
     if opcao == "1":
         return 7
-
     elif opcao == "2":
         return 15
-
     elif opcao == "3":
         return 30
-
     elif opcao == "4":
-
-        dias = int(
-            input(
-                "\nDigite o número de dias desejado: "
-            )
-        )
-
-        return dias
-
+        return int(input("\nDigite o número de dias desejado: "))
     else:
-
         print("\nOpção inválida.")
         return menu_periodo()
 
 
-def main():
+def selecionar_pdf():
+    print("\nSelecione o PDF da lista de alunos...")
 
+    root = Tk()
+    root.withdraw()
+
+    caminho_pdf = askopenfilename(
+        title="Selecione a lista de alunos em PDF",
+        filetypes=[("Arquivos PDF", "*.pdf")]
+    )
+
+    root.destroy()
+
+    if not caminho_pdf:
+        raise FileNotFoundError("Nenhum PDF foi selecionado.")
+
+    print("\nPDF selecionado:")
+    print(caminho_pdf)
+
+    return caminho_pdf
+
+
+def main():
     dias_analise = menu_periodo()
+    caminho_pdf_alunos = selecionar_pdf()
 
     driver = fazer_login()
 
     abrir_relatorio_acessos(
         driver,
-        dias_analise
+        dias_analise,
+        caminho_pdf_alunos
     )
 
     input("\nPressione ENTER para finalizar...")
