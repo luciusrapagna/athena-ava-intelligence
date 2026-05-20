@@ -63,7 +63,7 @@ def aplicar_sombreamento(celula, cor="F2F2F2"):
     tcPr.append(shd)
 
 
-def formatar_celula(celula, negrito=False, tamanho=9):
+def formatar_celula(celula, negrito=False, tamanho=8):
     celula.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
     for paragrafo in celula.paragraphs:
@@ -76,7 +76,7 @@ def formatar_celula(celula, negrito=False, tamanho=9):
             run.font.color.rgb = RGBColor(0, 0, 0)
 
 
-def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte):
+def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte, limite_linhas=None):
     titulo_paragrafo = doc.add_paragraph()
     titulo_paragrafo.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
@@ -84,6 +84,9 @@ def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte):
     run.bold = True
     run.font.name = "Times New Roman"
     run.font.size = Pt(12)
+
+    if limite_linhas is not None:
+        dataframe = dataframe.head(limite_linhas)
 
     tabela = doc.add_table(
         rows=1,
@@ -97,7 +100,7 @@ def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte):
 
     for i, coluna in enumerate(colunas):
         cabecalho[i].text = coluna
-        formatar_celula(cabecalho[i], negrito=True, tamanho=9)
+        formatar_celula(cabecalho[i], negrito=True, tamanho=8)
         aplicar_borda_celula(cabecalho[i])
 
     for indice, (_, linha) in enumerate(dataframe.iterrows()):
@@ -105,7 +108,7 @@ def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte):
 
         for i, coluna in enumerate(colunas):
             row[i].text = str(linha.get(coluna, ""))
-            formatar_celula(row[i], tamanho=8)
+            formatar_celula(row[i], tamanho=7)
             aplicar_borda_celula(row[i])
 
             if indice % 2 == 0:
@@ -123,7 +126,7 @@ def criar_tabela_padrao(doc, titulo, dataframe, colunas, fonte):
 
 
 def gerar_relatorio_word(df, dias_analise):
-    data_hoje = datetime.now().strftime("%d-%m-%Y")
+    data_hoje = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
 
     nome_relatorio = (
         f"outputs/word/relatorio_monitoramento_{data_hoje}.docx"
@@ -154,14 +157,17 @@ def gerar_relatorio_word(df, dias_analise):
         f"""
 O presente relatório foi elaborado pelo sistema Athena AVA Intelligence com o objetivo de monitorar indicadores de engajamento acadêmico no Ambiente Virtual de Aprendizagem institucional.
 
-A análise considerou registros de acesso estudantil referentes aos últimos {dias_analise} dias, permitindo identificar padrões de participação, frequência digital e potenciais situações de risco acadêmico.
+A análise considerou registros de acesso estudantil referentes aos últimos {dias_analise} dias, permitindo identificar padrões de participação, frequência digital, ranking de engajamento e potenciais situações de risco acadêmico.
 
 A classificação adotada considerou os seguintes critérios: estudantes com até 4 dias sem acesso foram classificados como sem risco; estudantes com 5 a 6 dias sem acesso foram classificados como médio risco; e estudantes com 7 dias ou mais sem atividade foram classificados como alto risco.
+
+O ranking de engajamento foi construído com base no total de acessos, na existência de acesso registrado no período e no número de dias desde o último acesso ao AVA.
 """
     )
     formatar_paragrafo(p_intro)
 
     df["Risco"] = df["Risco"].astype(str)
+    df["Nível de engajamento"] = df["Nível de engajamento"].astype(str)
 
     df_risco = df[
         df["Risco"].str.contains("ALTO|MÉDIO", na=False, regex=True)
@@ -171,11 +177,28 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
         ~df["Risco"].str.contains("ALTO|MÉDIO", na=False, regex=True)
     ].copy()
 
+    df_ranking = df.sort_values(
+        by=["Ranking"],
+        ascending=True
+    ).copy()
+
     total = len(df)
     total_risco = len(df_risco)
     total_sem_risco = len(df_sem_risco)
     alto = len(df[df["Risco"].str.contains("ALTO", na=False)])
     medio = len(df[df["Risco"].str.contains("MÉDIO", na=False)])
+
+    alto_eng = len(
+        df[df["Nível de engajamento"].str.contains("Alto", na=False)]
+    )
+
+    moderado_eng = len(
+        df[df["Nível de engajamento"].str.contains("moderado", na=False)]
+    )
+
+    baixo_eng = len(
+        df[df["Nível de engajamento"].str.contains("Baixo", na=False)]
+    )
 
     df_resumo = pd.DataFrame(
         {
@@ -185,6 +208,9 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
                 "Alunos sem risco",
                 "Alto risco",
                 "Médio risco",
+                "Alto engajamento",
+                "Engajamento moderado",
+                "Baixo engajamento",
             ],
             "Número": [
                 total,
@@ -192,6 +218,9 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
                 total_sem_risco,
                 alto,
                 medio,
+                alto_eng,
+                moderado_eng,
+                baixo_eng,
             ],
             "Percentual (%)": [
                 100,
@@ -199,6 +228,9 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
                 round((total_sem_risco / total) * 100, 2) if total > 0 else 0,
                 round((alto / total) * 100, 2) if total > 0 else 0,
                 round((medio / total) * 100, 2) if total > 0 else 0,
+                round((alto_eng / total) * 100, 2) if total > 0 else 0,
+                round((moderado_eng / total) * 100, 2) if total > 0 else 0,
+                round((baixo_eng / total) * 100, 2) if total > 0 else 0,
             ],
         }
     )
@@ -207,11 +239,44 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
 
     criar_tabela_padrao(
         doc=doc,
-        titulo="Tabela 1 – Distribuição dos estudantes segundo situação de risco no AVA",
+        titulo="Tabela 1 – Distribuição dos estudantes segundo risco e engajamento no AVA",
         dataframe=df_resumo,
         colunas=["Indicador", "Número", "Percentual (%)"],
         fonte="Fonte: Elaboração própria a partir dos registros de acesso do Ambiente Virtual de Aprendizagem."
     )
+
+    doc.add_heading("3. RANKING DE ENGAJAMENTO", level=1)
+
+    p_rank = doc.add_paragraph(
+        "A tabela a seguir apresenta o ranking de engajamento dos estudantes, considerando acesso registrado, frequência de participação e recência do último acesso ao AVA."
+    )
+    formatar_paragrafo(p_rank)
+
+    colunas_ranking = [
+        "Ranking",
+        "Matrícula",
+        "Aluno",
+        "Período",
+        "Turma",
+        "Total de acessos",
+        "Dias sem acesso",
+        "Nível de engajamento",
+    ]
+
+    criar_tabela_padrao(
+        doc=doc,
+        titulo="Tabela 2 – Ranking de engajamento dos estudantes no AVA",
+        dataframe=df_ranking,
+        colunas=colunas_ranking,
+        fonte="Fonte: Elaboração própria a partir da lista oficial de alunos e dos logs do AVA."
+    )
+
+    doc.add_heading("4. ESTUDANTES EM RISCO", level=1)
+
+    p_risco = doc.add_paragraph(
+        "A tabela a seguir apresenta os estudantes classificados em médio ou alto risco, considerando o tempo sem acesso ao AVA e a necessidade de acompanhamento pedagógico."
+    )
+    formatar_paragrafo(p_risco)
 
     colunas_risco = [
         "Matrícula",
@@ -225,6 +290,21 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
         "Sugestão de ação",
     ]
 
+    criar_tabela_padrao(
+        doc=doc,
+        titulo="Tabela 3 – Estudantes em risco e sugestões de ação pedagógica",
+        dataframe=df_risco,
+        colunas=colunas_risco,
+        fonte="Fonte: Elaboração própria a partir dos critérios institucionais de risco acadêmico digital."
+    )
+
+    doc.add_heading("5. ESTUDANTES SEM RISCO", level=1)
+
+    p_sem_risco = doc.add_paragraph(
+        "A tabela a seguir apresenta os estudantes que não foram classificados em risco no período analisado, indicando manutenção do acompanhamento regular."
+    )
+    formatar_paragrafo(p_sem_risco)
+
     colunas_sem_risco = [
         "Matrícula",
         "Aluno",
@@ -233,53 +313,55 @@ A classificação adotada considerou os seguintes critérios: estudantes com at�
         "Entrou no AVA",
         "Total de acessos",
         "Dias sem acesso",
-        "Risco",
+        "Nível de engajamento",
     ]
 
-    doc.add_heading("3. ESTUDANTES EM RISCO", level=1)
-
-    p_risco = doc.add_paragraph(
-        "A tabela a seguir apresenta os estudantes classificados em médio ou alto risco, considerando o tempo sem acesso ao AVA e a necessidade de acompanhamento pedagógico."
-    )
-    formatar_paragrafo(p_risco)
-
     criar_tabela_padrao(
         doc=doc,
-        titulo="Tabela 2 – Estudantes em risco e sugestões de ação pedagógica",
-        dataframe=df_risco,
-        colunas=colunas_risco,
-        fonte="Fonte: Elaboração própria a partir da lista oficial de alunos e dos logs do AVA."
-    )
-
-    doc.add_heading("4. ESTUDANTES SEM RISCO", level=1)
-
-    p_sem_risco = doc.add_paragraph(
-        "A tabela a seguir apresenta os estudantes que não foram classificados em risco no período analisado, indicando manutenção do acompanhamento regular."
-    )
-    formatar_paragrafo(p_sem_risco)
-
-    criar_tabela_padrao(
-        doc=doc,
-        titulo="Tabela 3 – Estudantes sem risco acadêmico no período analisado",
+        titulo="Tabela 4 – Estudantes sem risco acadêmico no período analisado",
         dataframe=df_sem_risco,
         colunas=colunas_sem_risco,
         fonte="Fonte: Elaboração própria a partir da lista oficial de alunos e dos logs do AVA."
     )
 
-    doc.add_heading("5. RECOMENDAÇÕES INSTITUCIONAIS", level=1)
+    doc.add_heading("6. PARECER PEDAGÓGICO AUTOMÁTICO", level=1)
+
+    p_parecer_intro = doc.add_paragraph(
+        "A tabela a seguir apresenta pareceres pedagógicos automáticos gerados a partir dos indicadores de engajamento, acesso e risco acadêmico digital."
+    )
+    formatar_paragrafo(p_parecer_intro)
+
+    colunas_parecer = [
+        "Aluno",
+        "Período",
+        "Turma",
+        "Risco",
+        "Nível de engajamento",
+        "Parecer pedagógico",
+    ]
+
+    criar_tabela_padrao(
+        doc=doc,
+        titulo="Tabela 5 – Parecer pedagógico automático por estudante",
+        dataframe=df,
+        colunas=colunas_parecer,
+        fonte="Fonte: Elaboração própria por meio do sistema Athena AVA Intelligence."
+    )
+
+    doc.add_heading("7. RECOMENDAÇÕES INSTITUCIONAIS", level=1)
 
     p_rec = doc.add_paragraph(
         """
-Recomenda-se que os estudantes em alto risco sejam priorizados para contato ativo pela coordenação, tutoria ou equipe pedagógica. Para estudantes em médio risco, sugere-se acompanhamento preventivo e orientação para retomada da participação no AVA. Para estudantes sem registro de acesso, recomenda-se verificar dificuldades técnicas, problemas de login, vínculo no ambiente virtual ou ausência de engajamento acadêmico.
+Recomenda-se que os estudantes em alto risco sejam priorizados para contato ativo pela coordenação, tutoria ou equipe pedagógica. Para estudantes em médio risco, sugere-se acompanhamento preventivo e orientação para retomada da participação no AVA. Para estudantes com baixo engajamento, recomenda-se verificar dificuldades técnicas, problemas de login, vínculo no ambiente virtual ou ausência de engajamento acadêmico.
 """
     )
     formatar_paragrafo(p_rec)
 
-    doc.add_heading("6. CONCLUSÃO INSTITUCIONAL", level=1)
+    doc.add_heading("8. CONCLUSÃO INSTITUCIONAL", level=1)
 
     p_conclusao = doc.add_paragraph(
         """
-O monitoramento automatizado do Ambiente Virtual de Aprendizagem permite identificar estudantes em diferentes níveis de risco acadêmico, subsidiando ações institucionais de acompanhamento, permanência estudantil e intervenção pedagógica precoce.
+O monitoramento automatizado do Ambiente Virtual de Aprendizagem permite identificar estudantes em diferentes níveis de risco acadêmico e engajamento digital, subsidiando ações institucionais de acompanhamento, permanência estudantil e intervenção pedagógica precoce.
 """
     )
     formatar_paragrafo(p_conclusao)

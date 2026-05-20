@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 COLUNAS_MONITORAMENTO = [
+    "Ranking",
     "Matrícula",
     "Aluno",
     "Período",
@@ -14,7 +15,9 @@ COLUNAS_MONITORAMENTO = [
     "Último acesso",
     "Dias sem acesso",
     "Risco",
+    "Nível de engajamento",
     "Sugestão de ação",
+    "Parecer pedagógico",
 ]
 
 
@@ -23,17 +26,76 @@ def classificar_risco_monitoramento(dias_sem_acesso):
         return "🔴 ALTO RISCO"
     elif dias_sem_acesso >= 5:
         return "🟡 MÉDIO RISCO"
-    return "🟢 SEM RISCO"
+    else:
+        return "🟢 SEM RISCO"
 
 
-def sugerir_acao(entrou, risco):
+def classificar_engajamento(entrou, total_acessos, dias_sem_acesso):
+    if entrou == "Não" or dias_sem_acesso >= 7:
+        return "Baixo engajamento"
+
+    if total_acessos >= 5 and dias_sem_acesso <= 4:
+        return "Alto engajamento"
+
+    return "Engajamento moderado"
+
+
+def sugerir_acao(entrou, risco, nivel_engajamento):
     if entrou == "Não":
-        return "Contato imediato para verificar dificuldade de acesso, login, vínculo no AVA ou ausência de participação."
+        return (
+            "Contato imediato para verificar dificuldade de acesso, login, "
+            "vínculo no AVA ou ausência de participação."
+        )
+
     if "ALTO" in risco:
-        return "Contato ativo da coordenação/tutoria e acompanhamento pedagógico prioritário."
+        return (
+            "Contato ativo da coordenação/tutoria e acompanhamento pedagógico prioritário."
+        )
+
     if "MÉDIO" in risco:
-        return "Acompanhamento preventivo e orientação para retomada da participação no AVA."
+        return (
+            "Acompanhamento preventivo e orientação para retomada da participação no AVA."
+        )
+
+    if nivel_engajamento == "Engajamento moderado":
+        return (
+            "Manter acompanhamento preventivo e estimular maior regularidade de acesso."
+        )
+
     return "Manter acompanhamento regular."
+
+
+def gerar_parecer_pedagogico(entrou, total_acessos, dias_sem_acesso, risco, nivel_engajamento):
+    if entrou == "Não":
+        return (
+            "O estudante não apresentou registro de acesso ao AVA no período analisado. "
+            "Recomenda-se contato ativo para verificar possíveis dificuldades técnicas, "
+            "problemas de login, vínculo no ambiente virtual ou barreiras de participação acadêmica."
+        )
+
+    if "ALTO" in risco:
+        return (
+            "O estudante apresenta condição de alto risco acadêmico digital, considerando o tempo "
+            "prolongado sem acesso recente ao AVA. Recomenda-se acompanhamento prioritário pela "
+            "coordenação, tutoria ou equipe pedagógica."
+        )
+
+    if "MÉDIO" in risco:
+        return (
+            "O estudante apresenta sinais de redução de engajamento no AVA. Recomenda-se acompanhamento "
+            "preventivo e orientação para retomada da participação nas atividades acadêmicas."
+        )
+
+    if nivel_engajamento == "Alto engajamento":
+        return (
+            "O estudante apresenta bom padrão de engajamento digital, com participação compatível "
+            "com o acompanhamento esperado no AVA."
+        )
+
+    return (
+        "O estudante apresenta participação parcial no AVA. Recomenda-se manter acompanhamento regular "
+        "e incentivar maior frequência de acesso."
+    )
 
 
 def limpar_texto(texto):
@@ -100,7 +162,6 @@ def ler_lista_alunos_pdf(caminho_pdf):
 
             if re.fullmatch(r"\d{8,10}", primeira):
                 matricula = primeira
-
                 nome_partes = []
 
                 for x, palavra in itens[1:]:
@@ -154,6 +215,26 @@ def ler_lista_alunos_pdf(caminho_pdf):
     return df_alunos
 
 
+def calcular_pontuacao_engajamento(entrou, total_acessos, dias_sem_acesso):
+    if entrou == "Não":
+        return 0
+
+    pontuacao = 0
+
+    pontuacao += min(total_acessos, 20) * 5
+
+    if dias_sem_acesso <= 1:
+        pontuacao += 40
+    elif dias_sem_acesso <= 4:
+        pontuacao += 25
+    elif dias_sem_acesso <= 6:
+        pontuacao += 10
+    else:
+        pontuacao += 0
+
+    return pontuacao
+
+
 def gerar_monitoramento_alunos(df_logs, dias_analise, caminho_pdf_alunos):
     df_alunos = ler_lista_alunos_pdf(caminho_pdf_alunos)
 
@@ -195,8 +276,35 @@ def gerar_monitoramento_alunos(df_logs, dias_analise, caminho_pdf_alunos):
 
         risco = classificar_risco_monitoramento(dias_sem_acesso)
 
+        nivel_engajamento = classificar_engajamento(
+            entrou,
+            total_acessos,
+            dias_sem_acesso
+        )
+
+        sugestao = sugerir_acao(
+            entrou,
+            risco,
+            nivel_engajamento
+        )
+
+        parecer = gerar_parecer_pedagogico(
+            entrou,
+            total_acessos,
+            dias_sem_acesso,
+            risco,
+            nivel_engajamento
+        )
+
+        pontuacao = calcular_pontuacao_engajamento(
+            entrou,
+            total_acessos,
+            dias_sem_acesso
+        )
+
         resultados.append(
             {
+                "Pontuação": pontuacao,
                 "Matrícula": matricula,
                 "Aluno": aluno,
                 "Período": periodo,
@@ -206,19 +314,32 @@ def gerar_monitoramento_alunos(df_logs, dias_analise, caminho_pdf_alunos):
                 "Último acesso": ultimo_acesso,
                 "Dias sem acesso": dias_sem_acesso,
                 "Risco": risco,
-                "Sugestão de ação": sugerir_acao(entrou, risco),
+                "Nível de engajamento": nivel_engajamento,
+                "Sugestão de ação": sugestao,
+                "Parecer pedagógico": parecer,
             }
         )
 
-    df_monitoramento = pd.DataFrame(
-        resultados,
-        columns=COLUNAS_MONITORAMENTO
-    )
+    df_monitoramento = pd.DataFrame(resultados)
+
+    if df_monitoramento.empty:
+        return pd.DataFrame(columns=COLUNAS_MONITORAMENTO)
+
+    df_monitoramento = df_monitoramento.sort_values(
+        by=["Pontuação", "Total de acessos"],
+        ascending=[False, False]
+    ).reset_index(drop=True)
+
+    df_monitoramento["Ranking"] = df_monitoramento.index + 1
+
+    df_monitoramento = df_monitoramento[
+        COLUNAS_MONITORAMENTO
+    ]
 
     print("\nTotal de alunos no monitoramento:")
     print(len(df_monitoramento))
 
-    print("\nPrimeiros alunos no monitoramento:")
+    print("\nPrimeiros alunos no ranking:")
     print(df_monitoramento.head(10))
 
     return df_monitoramento
