@@ -1,5 +1,4 @@
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename
+import os
 
 from login.moodle_login import fazer_login
 from relatorios.baixar_acessos import abrir_relatorio_acessos
@@ -20,32 +19,27 @@ def menu_periodo():
 
     if opcao == "1":
         return 7
-    elif opcao == "2":
+    if opcao == "2":
         return 15
-    elif opcao == "3":
+    if opcao == "3":
         return 30
-    elif opcao == "4":
+    if opcao == "4":
         return int(input("\nDigite o número de dias desejado: "))
-    else:
-        print("\nOpção inválida.")
-        return menu_periodo()
+
+    print("\nOpção inválida.")
+    return menu_periodo()
 
 
 def selecionar_pdf():
-    print("\nSelecione o PDF da lista de alunos...")
+    print("\nInforme o caminho completo do PDF da lista de alunos.\n")
 
-    root = Tk()
-    root.withdraw()
-
-    caminho_pdf = askopenfilename(
-        title="Selecione a lista de alunos em PDF",
-        filetypes=[("Arquivos PDF", "*.pdf")]
-    )
-
-    root.destroy()
+    caminho_pdf = input("Caminho do PDF: ").strip().strip('"').strip("'")
 
     if not caminho_pdf:
-        raise FileNotFoundError("Nenhum PDF foi selecionado.")
+        raise FileNotFoundError("Nenhum PDF foi informado.")
+
+    if not os.path.exists(caminho_pdf):
+        raise FileNotFoundError(f"Arquivo não encontrado: {caminho_pdf}")
 
     print("\nPDF selecionado:")
     print(caminho_pdf)
