@@ -78,3 +78,11 @@ def cruzar_alunos_moodle(alunos, caminho_relatorio):
         })
 
     return pd.DataFrame(dados)
+
+
+def processar_moodle(caminho_relatorio):
+    """
+    Função compatível com a interface Streamlit.
+    Lê o relatório Moodle e devolve o DataFrame processado.
+    """
+    return ler_relatorio_moodle(caminho_relatorio)
